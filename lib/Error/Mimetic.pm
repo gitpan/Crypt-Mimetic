@@ -1,21 +1,69 @@
-#
-# The error class definition for Mimetic (see Error module)
-#
+=pod
+
+=head1 NAME
+
+Error::Mimetic - The error class definition for Crypt::Mimetic(3) (see Error(3) module)
+
+=head1 DESCRIPTION
+
+This module is a part of Crypt::Mimetic(3) distribution.
+
+This module extends I<Error::Simple>.
+
+=cut
 
 package Error::Mimetic;
 use Error;
 use strict;
 use vars qw($VERSION);
-$VERSION = '0.01';
+$VERSION = '0.02';
+
+=pod
+
+=head1 CLASS INTERFACE
+
+See Error(3) for details about methods not described below
+
+=cut
 
 @Error::Mimetic::ISA = qw(Error::Simple);
 
+=pod
+
+=head2 CONSTRUCTORS
+
+Error::Mimetic constructor takes 3 arguments:
+the first is the error description, the second are details and the last
+is the type: C<error> (default) or C<warning>.
+
+=cut
+
 sub new {
-	my ($self, $text, $details) = @_;
+	my ($self, $text, $details, $type) = @_;
 	my $s = $self->SUPER::new($text,0);
 	$s->{'-object'} = $details;
+	$s->{'-type'} = "error";
+	$s->{'-type'} = $type if $type;
 	return $s;
 }
+
+=pod
+
+=head2 OVERLOAD METHODS
+
+=over 4
+
+=item string I<stringify> ()
+
+A method that converts the object into a string.
+
+If I<$Error::Debug> is == 0, then only description is printed.
+
+If I<$Error::Debug> is > 0, then details are printed after description.
+
+If I<$Error::Debug> is > 1, then description, details and informations about files and lines where error raised are printed.
+
+=cut
 
 sub stringify {
 	my $self = shift;
@@ -43,23 +91,23 @@ sub stringify {
 
 =pod
 
-=head1 NAME
+=head2 OBJECT METHODS
 
-Error::Mimetic - The error class definition for Crypt::Mimetic (see Error module)
+=item string I<type> ()
 
-=head1 DESCRIPTION
+Return error type: C<error> (default) or C<warning>.
 
-This module is a part of I<Crypt::Mimetic> distribution.
+=cut
 
-This module extends I<Error::Simple>. It's constructor takes two arguments:
-the first is the error description, the second are details.
+sub type {
+	my $self = shift;
+	return $self->{'-type'};
+}
 
-If I<$Error::Debug> is == 0, then only description is printed.
+1;
+__END__
 
-If I<$Error::Debug> is > 0, then details are printed after description.
-
-If I<$Error::Debug> is > 1, then description, details and informations about files
-and lines where error raised are printed.
+=pod
 
 =head1 NEEDED MODULES
 
@@ -79,4 +127,3 @@ This program is free software; you can redistribute it and/or modify it under th
 Erich Roncarolo <erich-roncarolo@users.sourceforge.net>
 
 =cut
-

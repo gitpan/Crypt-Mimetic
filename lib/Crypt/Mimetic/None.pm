@@ -1,26 +1,59 @@
+=pod
+
+=head1 NAME
+
+Crypt::Mimetic::None - No Encryption
+
+	
+=head1 DESCRIPTION
+
+This module is a part of I<Crypt::Mimetic>.
+
+This modules does not encrypt anything: it only do a bitwise negation. I<DecryptFile> needs @info containing generic-blocks-length and last-block-length (padlen). I<EncryptString> and I<DecryptString> return the bitwise negated string.
+
+=cut
+
 package Crypt::Mimetic::None;
 use strict;
 use Error::Mimetic;
 use vars qw($VERSION);
 $VERSION = '0.01';
 
-#
-# string ShortDescr()
-#
+=pod
+
+=head1 PROCEDURAL INTERFACE
+
+=item string I<ShortDescr> ()
+
+Return a short description of algorithm
+
+=cut
+
 sub ShortDescr {
 	return "None - Special algorithm to not encrypt; very fast.";
 }
 
-#
-# boolean PasswdNeeded()
-#
+=pod
+
+=item boolean I<PasswdNeeded> ()
+
+Return true if password is needed by this algorithm, false otherwise.
+('None' return always false)
+
+=cut
+
 sub PasswdNeeded {
 	return 0;
 }
 
-#
-# (int,int,int,[string]) EncryptFile($filename,$output,$algorithm,$key,@info)
-#
+=pod
+
+=item ($len,$blocklen,$padlen,[string]) I<EncryptFile> ($filename,$output,$algorithm,$key,@info)
+
+Do a bitwise negation of $filename. See I<Crypt::Mimetic::EncryptFile>.
+
+=cut
+
 sub EncryptFile {
 	my ($filename,$output,$algorithm,$key,@info) = @_;
 	my ($buf, $text, $txt) = ("","","");
@@ -48,17 +81,27 @@ sub EncryptFile {
 	return ($len,$blocklen,$padlen,$txt);
 }
 
-#
-# string EncryptString($string,$algorithm,$key,@info)
-#
+=pod
+
+=item string I<EncryptString> ($string,$algorithm,$key,@info)
+
+Do a bitwise negation of $string. See I<Crypt::Mimetic::EncryptString>.
+
+=cut
+
 sub EncryptString {
 	my ($string,$algorithm,$key,@info) = @_;
 	return ~$string;
 }
 
-#
-# [string] DecryptFile($filename,$output,$offset,$len,$algorithm,$key,@info)
-#
+=pod
+
+=item [string] I<DecryptFile> ($filename,$output,$offset,$len,$algorithm,$key,@info)
+
+Do a bitwise negation of $filename. See I<Crypt::Mimetic::DecryptFile>.
+
+=cut
+
 sub DecryptFile {
 	my ($filename,$output,$offset,$len,$algorithm,$key,@info) = @_;
 	my ($blocklen,$padlen) = @info;
@@ -95,62 +138,23 @@ sub DecryptFile {
 	}
 }
 
-#
-# string DecryptString($string,$algorithm,$key,@info)
-#
+=pod
+
+=item string I<DecryptString> ($string,$algorithm,$key,@info)
+
+Do a bitwise negation of $string. See I<Crypt::Mimetic::DecryptString>.
+
+=cut
+
 sub DecryptString {
 	my ($string,$algorithm,$key,@info) = @_;
 	return ~$string;
 }
 
 1;
+__END__
 
 =pod
-
-=head1 NAME
-
-Crypt::Mimetic::None - No Encryption
-
-	
-=head1 DESCRIPTION
-
-This module is a part of I<Crypt::Mimetic>.
-
-This modules does not encrypt anything: it only do a bitwise negation. I<DecryptFile> needs @info containing generic-blocks-length and last-block-length (padlen). I<EncryptString> and I<DecryptString> return the bitwise negated string.
-
-
-=head1 SYNOPSIS
-
-=item string I<ShortDescr> ()
-
-Return a short description of algorithm
-
-
-=item boolean I<PasswdNeeded> ()
-
-Return true if password is needed by this algorithm, false otherwise.
-('None' return always false)
-
-
-=item ($len,$blocklen,$padlen,[string]) I<EncryptFile> ($filename,$output,$algorithm,$key,@info)
-
-Do a bitwise negation of $filename. See I<Crypt::Mimetic::EncryptFile>.
-
-
-=item string I<EncryptString> ($string,$algorithm,$key,@info)
-
-Do a bitwise negation of $string. See I<Crypt::Mimetic::EncryptString>.
-
-
-=item [string] I<DecryptFile> ($filename,$output,$offset,$len,$algorithm,$key,@info)
-
-Do a bitwise negation of $filename. See I<Crypt::Mimetic::DecryptFile>.
-
-
-=item string I<DecryptString> ($string,$algorithm,$key,@info)
-
-Do a bitwise negation of $string. See I<Crypt::Mimetic::DecryptString>.
-
 
 =head1 NEEDED MODULES
 
@@ -174,4 +178,3 @@ This program is free software; you can redistribute it and/or modify it under th
 Erich Roncarolo <erich-roncarolo@users.sourceforge.net>
 
 =cut
-

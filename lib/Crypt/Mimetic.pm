@@ -1,3 +1,106 @@
+=pod
+
+=head1 NAME
+
+Crypt::Mimetic - Crypt a file and mask it behind another file
+
+
+=head1 SYNOPSIS
+
+ use Crypt::Mimetic;
+	
+ Crypt::Mimetic::Mask($original_file, $mask_file, $destination_file, $algorithm);
+ Crypt::Mimetic::Unmask($mimetic_file);
+
+ Crypt::Mimetic::Main($original_file, $mask_file, $destination_file, [$algorithm]);
+ Crypt::Mimetic::Main($mimetic_file);
+	
+
+=head1 DESCRIPTION
+
+This module allows you to hide a file by encrypting in and then attaching
+it to another file of your choice.
+This mimetic file then looks and behaves like a normal file,
+and can be stored, used or emailed without attracting attention.
+
+
+=head1 EXAMPLES
+
+=head2 Here your first running example
+
+ use Crypt::Mimetic;
+ use Error;
+ $Error::Debug = 1;
+
+ &Crypt::Mimetic::Main(@ARGV);
+
+You should already have it in your bin/ files: write I<mimetic> and follow instructions.
+
+=head2 How to make a test of all encryption algorithms
+
+ use Crypt::Mimetic;
+
+ use Error qw(:try);
+ $Error::Debug = 1;
+
+ print "\nPerforming tests for Crypt::Mimetic\n";
+ print "Looking for available encryption algorithms, please wait... ";
+ select((select(STDOUT), $| = 1)[0]); #flush stdout
+
+ @algo = Crypt::Mimetic::GetEncryptionAlgorithms();
+ print @algo ." algorithms found.\n\n";
+
+ $str = "This is a test string";
+ $failed = 0;
+ $warn = 0;
+
+ foreach my $algo (@algo) {
+
+    try {
+
+       print ''. Crypt::Mimetic::ShortDescr($algo) ."\n";
+       print " Encrypting string '$str' with $algo...";
+       select((select(STDOUT), $| = 1)[0]); #flush stdout
+
+       ($enc,@info) = Crypt::Mimetic::EncryptString($str,$algo,"my stupid password");
+       print " done.\n";
+
+       print " Decrypting encrypted string with $algo...";
+       select((select(STDOUT), $| = 1)[0]);
+
+       $dec = Crypt::Mimetic::DecryptString($enc,$algo,"my stupid password",@info);
+       print " '$dec'.\n";
+
+       if ($dec eq $str) {
+          print "Algorithm $algo: ok.\n\n";
+       } else {
+          print "Algorithm $algo: failed. Decrypted string '$dec' not equals to original string '$str'\n\n";
+          $failed++;
+       }#if-else
+
+    } catch Error::Mimetic with {
+       my $x = shift;
+
+       if ($x->type() eq "error") {
+          print "Algorithm $algo: error. ". $x->stringify() ."\n";
+          $failed++;
+       } elsif ($x->type() eq "warning") {
+          print "Algorithm $algo: warning. ". $x->stringify() ."\n";
+          $warn++;
+       }#if-else
+
+    }#try-catch
+
+ }#foreach
+
+ print @algo ." tests performed: ". (@algo - $failed) ." passed, $failed failed ($warn warnings).\n\n";
+ exit $failed;
+
+Script I<test.pl> used by I<make test> in this distribution
+do exactly the same thing.
+
+=cut
+
 package Crypt::Mimetic;
 use strict;
 use vars qw($VERSION);
@@ -8,11 +111,21 @@ use Term::ReadKey;
 use File::Copy;
 use File::Find ();
 
-$VERSION = '0.01';
+$VERSION = '0.02';
 
-#
-# @array GetEncryptionAlgorithms
-#
+=pod
+
+=head1 PROCEDURAL INTERFACE
+
+=over 4
+
+=item @array I<GetEncryptionAlgorithm> ()
+
+Return an array with names of encryption algorithms. Each algorithm is
+implemented in module Crypt::Mimetic::<algorithm>
+
+=cut
+
 sub GetEncryptionAlgorithms {
 	# Set the variable $File::Find::dont_use_nlink if you're using AFS,
 	# since AFS cheats.
@@ -50,9 +163,15 @@ sub GetEncryptionAlgorithms {
 	return ( keys %algo );
 }
 
-#
-# string GetPasswd($prompt)
-#
+=pod
+
+=item string I<GetPasswd> ($prompt)
+
+Ask for a password with a given prompt (default "Password: ")
+and return it.
+
+=cut
+
 sub GetPasswd {
 	my ($prompt) = @_;
 	$prompt = "Password: " unless $prompt;
@@ -65,9 +184,16 @@ sub GetPasswd {
 	return $key;
 }
 
-#
-# string GetConfirmedPasswd()
-#
+=pod
+
+=item string I<GetConfirmedPasswd> ()
+
+Ask for a password twice and return it only if it's correct.
+
+Throws an I<Error::Mimetic> if passwords don't match
+
+=cut
+
 sub GetConfirmedPasswd {
 	my $passwd = GetPasswd();
 	return "" if ($passwd eq "");
@@ -82,64 +208,130 @@ sub GetConfirmedPasswd {
 sub ExternalCall {
 	my ($algorithm,$func,@args) = @_;
 	eval('use Crypt::Mimetic::' . $algorithm);
-#	print "debug:: --$@--\n";
 	throw Error::Mimetic ("Error using algorithm '$algorithm' at ". __FILE__ ." line ". __LINE__, $@) if $@;
-	#die "Error using algorithm '$algorithm' - " if $@;
 	no strict 'refs';
 	return &{ 'Crypt::Mimetic::' . $algorithm . '::' . $func }(@args);
 }
 
-#
-# string ShortDescr($algorithm)
-#
+=pod
+
+=item string I<ShortDescr> ($algorithm)
+
+Return a short description of $algorithm
+
+=cut
+
 sub ShortDescr {
 	my ($algorithm) = @_;
-	return ExternalCall($algorithm,'ShortDescr');
+	try {
+		return ExternalCall($algorithm,'ShortDescr');
+	} catch Error::Mimetic with {
+		my $x = shift;
+		$x->{'-type'} = "warning";
+		throw $x;
+	}
 }
 
-#
-# boolean PasswdNeeded($algorithm)
-#
+=pod
+
+=item boolean I<PasswdNeeded> ($algorithm)
+
+Return true if password is needed by this $algorithm, false otherwise.
+
+=cut
+
 sub PasswdNeeded {
 	my ($algorithm) = @_;
 	return ExternalCall($algorithm,'PasswdNeeded');
 }
 
-#
-# (int,int,int,[string]) EncryptFile($filename,$output,$algorithm,$key,@info)
-#
+=pod
+
+=item ($len,$blocklen,$padlen,[string]) I<EncryptFile> ($filename,$output,$algorithm,$key,@info)
+
+Call specific routine to encrypt $filename according to $algorithm. Return 3 int:
+ $len      - is the total output length
+ $blocklen - length of an encrypted block (if needed)
+ $padlen   - length of last encrypted block (if needed)
+
+If $output is null then the output is returned as string.
+Ask for a password if key not given.
+
+Throws an I<Error::Mimetic> if cannot open files or if password is not correctly given.
+
+=cut
+
 sub EncryptFile {
 	my ($filename,$output,$algorithm,$key,@info) = @_;
 	return ExternalCall($algorithm,'EncryptFile',$filename,$output,$algorithm,$key,@info);
 }
 
-#
-# string EncryptString($string,$algorithm,$key,@info)
-#
+=pod
+
+=item string I<EncryptString> ($string,$algorithm,$key,@info)
+
+Call specific routine to encrypt $string according to $algorithm and return an encrypted string.
+Ask for a password if key not given.
+
+Throws an I<Error::Mimetic> if password is not correctly given.
+
+=cut
+
 sub EncryptString {
 	my ($string,$algorithm,$key,@info) = @_;
 	return ExternalCall($algorithm,'EncryptString',$string,$algorithm,$key,@info);
 }
 
-#
-# [string] DecryptFile($filename,$output,$offset,$len,$algorithm,$key,@info)
-#
+=pod
+
+=item [string] I<DecryptFile> ($filename,$output,$offset,$len,$algorithm,$key,@info)
+
+Call specific routine to decrypt $filename according to $algorithm. Return decrypted file as string if $output is not given, void otherwise.
+Ask for a password if key not given.
+
+Throws an I<Error::Mimetic> if cannot open files or if password is not given
+
+=cut
+
 sub DecryptFile {
 	my ($filename,$output,$offset,$len,$algorithm,$key,@info) = @_;
 	return ExternalCall($algorithm,'DecryptFile',$filename,$output,$offset,$len,$algorithm,$key,@info);
 }
 
-#
-# string DecryptString($string,$algorithm,$key,@info)
-#
+=pod
+
+=item string I<DecryptString> ($string,$algorithm,$key,@info)
+
+Call specific routine to decrypt $string according to $algorithm and return a decrypted string.
+Ask for a password if key not given.
+
+Throws an I<Error::Mimetic> if password is not correctly given.
+
+=cut
+
 sub DecryptString {
 	my ($string,$algorithm,$key,@info) = @_;
 	return ExternalCall($algorithm,'DecryptString',$string,$algorithm,$key,@info);
 }
 
-#
-# string Sign($original_file,$mask_file,$dlen,$algorithm,$key,@info)
-#
+=pod
+
+=item string I<Sign> ($original_file,$mask_file,$dlen,$algorithm,$key,@info)
+
+Create following sign (all on the same line):
+ Mimetic\0
+ version\0
+ mask_file_name\0
+ mask_file_length\0
+ original_file_name\0
+ encrypted_file_length\0
+ @info
+
+than encrypt it and calculate length of encrypted sign.
+Return a string composed by concatenation of encrypted sign, algorithm (32 bytes null padding string) and its length (8 bytes hex number).
+
+=cut
+
 sub Sign {
 	my ($original_file,$mask_file,$dlen,$algorithm,$key,@info) = @_;
 	my $mlen = (stat($mask_file))[7];
@@ -150,9 +342,16 @@ sub Sign {
 	return join '', $sign, ~$algo, ~$slen;
 }
 
-#
-# (string,int) GetSignInfo($mimetic_file)
-#
+=pod
+
+=item (string,int) I<GetSignInfo> ($mimetic_file)
+
+Return the algorithm and the length of the sing read from last 40 bytes of $mimetic_file.
+
+Throws an I<Error::Mimetic> if cannot open file
+
+=cut
+
 sub GetSignInfo {
 	my ($mimetic_file) = @_;
 	my $len = (stat($mimetic_file))[7];
@@ -166,9 +365,25 @@ sub GetSignInfo {
 	return (unpack ("A32", ~$algo) , hex(~$slen));
 }
 
-#
-# ($Mimetic,$version,$mask_file,$mlen,$original_file,$olen,@pinfo) = ParseSign($mimetic_file,$slen,$algorithm,$key,@info);
-#
+=pod
+
+=item ($Mimetic,$version,$mask_file,$mlen,$original_file,$olen,@pinfo) = I<ParseSign> ($mimetic_file,$slen,$algorithm,$key,@info);
+
+Extract information from sign of $mimetic_file.
+You can obtain $slen and $algorithm from I<GetSignInfo>($mimetic_file) and key from I<GetPasswd>(void)
+This sub returns an array:
+ $Mimetic        - constant string "Mimetic"
+ $version        - version of the module
+ $mask_file      - mask file's name
+ $mlen           - mask file's length
+ $original_file  - original file's name
+ $olen           - original file's length
+ @pinfo          - specific encryption algorithm information
+
+Throws an I<Error::Mimetic> if cannot open file
+
+=cut
+
 sub ParseSign {
 	my ($mimetic_file,$slen,$algorithm,$key,@info) = @_;
 	my $len = (stat($mimetic_file))[7];
@@ -182,9 +397,16 @@ sub ParseSign {
 	return split "\0", $sign;
 }
 
-#
-# void WriteMaskFile($mimetic_file,$len,$mask_file)
-#
+=pod
+
+=item void I<WriteMaskFile> ($mimetic_file,$len,$mask_file)
+
+Extract the mask file from $mimetic_file and save it in $mask_file.
+
+Throws an I<Error::Mimetic> if cannot open files
+
+=cut
+
 sub WriteMaskFile {
 	my ($mimetic_file,$len,$mask_file) = @_;
 	my ($buf,$blocks,$padlen) = ("",int($len/32768),($len%32768));
@@ -200,9 +422,16 @@ sub WriteMaskFile {
 	close(IN);
 }
 
-#
-# void Mask($original_file,$mask_file,$destination_file,$algorithm,$key,@info)
-#
+=pod
+
+=item void I<Mask> ($original_file,$mask_file,$destination_file,$algorithm,$key,@info)
+
+Mask the $original_file with a $mask_file and put everything in $destination_file, according $algorithm and @info instruction. Return true on success, false otherwise.
+
+Throws an I<Error::Mimetic> if cannot open files or password not correctly given
+
+=cut
+
 sub Mask {
 	my ($original_file,$mask_file,$destination_file,$algorithm,$key,@info) = @_;
 
@@ -223,9 +452,18 @@ sub Mask {
 	close(OF);
 }
 
-#
-# void Unmask($mimetic_file,$algorithm,$key,@info)
-#
+=pod
+
+=item boolean I<Unmask> ($mimetic_file,$algorithm,$key,@info)
+
+Unmask a $mimetic file splitting it in 2 files:
+ 1. mask file
+ 2. original file
+
+Throws an I<Error::Mimetic> if cannot open files or password not given
+
+=cut
+
 sub Unmask {
 	my ($mimetic_file,$algorithm,$key,@info) = @_;
 	my ($algo,$slen) = GetSignInfo($mimetic_file);
@@ -242,15 +480,19 @@ sub Unmask {
 	DecryptFile($mimetic_file,$original_file,$mlen,$olen,$algorithm,$key,@pinfo);
 }
 
-#
-# A very trivial Main
-#
-# Usage:
-#  to camouflage a file with a mask
-#    Main($original_file, $mask_file, $destination_file, [$algorithm]);
-#  to split camouflaged file in original file and mask
-#    Main($mimetic_file);
-#
+=pod
+
+=item void I<Main> (@arguments)
+
+A demo main to use this module
+ Usage:
+  to camouflage a file with a mask
+    Main($original_file, $mask_file, $destination_file, [$algorithm]);
+  to split camouflaged file in original file and mask
+    Main($mimetic_file);
+
+=cut
+
 sub Main {
 	my @argv = @_;
 	my $argc = $#argv + 1;
@@ -294,219 +536,8 @@ END
 1;
 __END__
 
+
 =pod
-
-=head1 NAME
-
-Crypt::Mimetic - Crypt a file and mask it behind another file
-
-
-=head1 SYNOPSIS
-
- use Crypt::Mimetic;
-	
- Crypt::Mimetic::Mask($original_file, $mask_file, $destination_file, $algorithm);
- Crypt::Mimetic::Unmask($mimetic_file);
-
- Crypt::Mimetic::Main($original_file, $mask_file, $destination_file, [$algorithm]);
- Crypt::Mimetic::Main($mimetic_file);
-	
-
-=head1 DESCRIPTION
-
-This module allows you to hide a file by encrypting in and then attaching
-it to another file of your choice.
-This mimetic file then looks and behaves like a normal file,
-and can be stored, used or emailed without attracting attention.
-
-
-=head1 EXAMPLES
-
-=head2 Here your first running example
-
- use Crypt::Mimetic;
- use Error;
- $Error::Debug = 1;
-
- &Crypt::Mimetic::Main(@ARGV);
-
-You should already have it in your bin/ files: write I<mimetic> and follow instructions.
-
-=head2 How to make a test of all encryption algorithms
-
- use Crypt::Mimetic;
-
- print "\nPerforming tests for Crypt::Mimetic\n";
- print "Looking for available encryption algorithms, please wait... ";
- select((select(STDOUT), $| = 1)[0]); #flush stdout
- @algo = Crypt::Mimetic::GetEncryptionAlgorithms();
- print @algo ." algorithms found.\n\n";
- $str = "This is a test string";
- $failed = 0;
-
- foreach my $algo (@algo) {
-   print ''. Crypt::Mimetic::ShortDescr($algo) ."\n";
-
-   print " Encrypting string '$str' with $algo...";
-   select((select(STDOUT), $| = 1)[0]); #flush stdout
-   ($enc,@info) = Crypt::Mimetic::EncryptString($str,$algo,
-     "my stupid password");
-   print " done.\n";
-
-   print " Decrypting encrypted string with $algo...";
-   select((select(STDOUT), $| = 1)[0]);
-   $dec = Crypt::Mimetic::DecryptString($enc,$algo,
-     "my stupid password",@info);
-   print " '$dec'.\n";
-
-   if ($dec eq $str) {
-      print "Algorithm $algo: ok.\n\n";
-   } else {
-      print "Algorithm $algo: failed.";
-      print " Decrypted string '$dec' not equals to";
-      print " original string '$str'\n\n";
-      $failed++;
-   }
-
- }#foreach
-
- print @algo ." tests performed: ";
- print (@algo - $failed) ." passed, ";
- print "$failed failed.\n\n";
- exit $failed;
-
-Script I<test.pl> used by I<make test> in this distribution
-do exactly the same thing.
-
-
-=head1 PROCEDURAL INTERFACE
-
-
-=item @array I<GetEncryptionAlgorithm> ()
-
-Return an array with names of encryption algorithms. Each algorithm is
-implemented in module Crypt::Mimetic::<algorithm>
-
-
-=item string I<ShortDescr> ($algorithm)
-
-Return a short description of $algorithm
-
-
-=item boolean I<PasswdNeeded> ($algorithm)
-
-Return true if password is needed by this $algorithm, false otherwise.
-
-
-=item string I<GetPasswd> ($prompt)
-
-Ask for a password with a given prompt (default "Password: ")
-and return it.
-
-
-=item string I<GetConfirmedPasswd> ()
-
-Ask for a password twice and return it only if it's correct.
-Throws an I<Error::Mimetic> if passwords don't match
-
-
-=item ($len,$blocklen,$padlen,[string]) I<EncryptFile> ($filename,$output,$algorithm,$key,@info)
-
-Call specific routine to encrypt $filename according to $algorithm. Return 3 int:
- $len  is the total output length
- $blocklen  is the length of an ecrypted block (if needed)
- $padlen  is the length of last ecrypted block (if needed)
- If $output is null then the output is returned as string.
-Ask for a password if key not given.
-Throws an I<Error::Mimetic> if cannot open files or if password is not correctly given.
-
-
-=item string I<EncryptString> ($string,$algorithm,$key,@info)
-
-Call specific routine to encrypt $string according to $algorithm and return an encrypted string.
-Ask for a password if key not given.
-Throws an I<Error::Mimetic> if password is not correctly given.
-
-
-=item [string] I<DecryptFile> ($filename,$output,$offset,$len,$algorithm,$key,@info)
-
-Call specific routine to decrypt $filename according to $algorithm. Return decrypted file as string if $output is not given, void otherwise.
-Ask for a password if key not given.
-Throws an I<Error::Mimetic> if cannot open files or if password is not given
-
-
-=item string I<DecryptString> ($string,$algorithm,$key,@info)
-
-Call specific routine to decrypt $string according to $algorithm and return a decrypted string.
-Ask for a password if key not given.
-Throws an I<Error::Mimetic> if password is not correctly given.
-
-
-=item string I<Sign> ($original_file,$mask_file,$dlen,$algorithm,$key,@info)
-
-Create following sign:
- Mimetic\0
- version\0
- mask_file_name\0
- mask_file_length\0
- original_file_name\0
- encrypted_file_length\0
- @info
- (all on the same line)
-than encrypt it and calculate length of encrypted sign.
-Return a string composed by concatenation of encrypted sign, algorithm (32 bytes null padding string) and its length (8 bytes hex number).
-
-
-=item (string,int) I<GetSignInfo> ($mimetic_file)
-
-Return the algorithm and the length of the sing read from last 40 bytes of $mimetic_file.
-Throws an I<Error::Mimetic> if cannot open file
-
-
-=item ($Mimetic,$version,$mask_file,$mlen,$original_file,$olen,@pinfo) = I<ParseSign> ($mimetic_file,$slen,$algorithm,$key,@info);
-
-Extract information from sign of $mimetic_file.
-You can obtain $slen and $algorithm from I<GetSignInfo>($mimetic_file) and key from I<GetPasswd>(void)
-This sub returns an array:
- $Mimetic        - constant string "Mimetic"
- $version        - version of the module
- $mask_file      - mask file's name
- $mlen           - mask file's length
- $original_file  - original file's name
- $olen           - original file's length
- @pinfo          - specific encryption algorithm information
- Throws an I<Error::Mimetic> if cannot open file
-
-
-=item void I<WriteMaskFile> ($mimetic_file,$len,$mask_file)
-
-Extract the mask file from $mimetic_file and save it in $mask_file.
-Throws an I<Error::Mimetic> if cannot open files
-
-
-=item void I<Mask> ($original_file,$mask_file,$destination_file,$algorithm,$key,@info)
-
-Mask the $original_file with a $mask_file and put everything in $destination_file, according $algorithm and @info instruction. Return true on success, false otherwise.
-Throws an I<Error::Mimetic> if cannot open files or password not correctly given
-
-
-=item boolean I<Unmask> ($mimetic_file,$algorithm,$key,@info)
-
-Unmask a $mimetic file splitting it in 2 files:
- 1. mask file
- 2. original file
- Throws an I<Error::Mimetic> if cannot open files or password not given
-
-
-=item void I<Main> (@arguments)
-
-A demo main to use this module
- Usage:
-  to camouflage a file with a mask
-    Main($original_file, $mask_file, $destination_file, [$algorithm]);
-  to split camouflaged file in original file and mask
-    Main($mimetic_file);
-
 
 =head2 About errors
 

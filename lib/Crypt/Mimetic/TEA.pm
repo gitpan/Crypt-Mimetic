@@ -1,3 +1,18 @@
+=pod
+
+=head1 NAME
+
+Crypt::Mimetic::TEA - Tiny Encryption Algorithm
+
+	
+=head1 DESCRIPTION
+
+This module is a part of I<Crypt::Mimetic>.
+
+This modules uses TEA to encrypt blocks of bytes, so I<DecryptFile> needs @info containing generic-blocks-length and last-block-length (padlen) to know how decrypt a file. I<EncryptString> and I<DecryptString> always encrypt/decrypt a string as a single block.
+
+=cut
+
 package Crypt::Mimetic::TEA;
 use strict;
 use Error::Mimetic;
@@ -7,23 +22,41 @@ $VERSION = '0.01';
 eval 'use Crypt::Tea';
 die ("Crypt::Tea required by ". __PACKAGE__) if $@;
 
-#
-# string ShortDescr()
-#
+=pod
+
+=head1 PROCEDURAL INTERFACE
+
+=item string I<ShortDescr> ()
+
+Return a short description of algorithm
+
+=cut
+
 sub ShortDescr {
 	return "TEA - Tiny Encryption Algorithm.";
 }
 
-#
-# boolean PasswdNeeded()
-#
+=pod
+
+=item boolean I<PasswdNeeded> ()
+
+Return true if password is needed by this algorithm, false otherwise.
+('TEA' return always true)
+
+=cut
+
 sub PasswdNeeded {
 	return 1;
 }
 
-#
-# (int,int,int,[string]) EncryptFile($filename,$output,$algorithm,$key,@info)
-#
+=pod
+
+=item ($len,$blocklen,$padlen,[string]) I<EncryptFile> ($filename,$output,$algorithm,$key,@info)
+
+Encrypt a file with TEA algorithm. See I<Crypt::Mimetic::EncryptFile>.
+
+=cut
+
 sub EncryptFile {
 	my ($filename,$output,$algorithm,$key,@info) = @_;
 	my ($buf, $text, $txt) = ("","","");
@@ -52,18 +85,28 @@ sub EncryptFile {
 	return ($len,$blocklen,$padlen,$txt);
 }
 
-#
-# string EncryptString($string,$algorithm,$key,@info)
-#
+=pod
+
+=item string I<EncryptString> ($string,$algorithm,$key,@info)
+
+Encrypt a string with TEA algorithm. See I<Crypt::Mimetic::EncryptString>.
+
+=cut
+
 sub EncryptString {
 	my ($string,$algorithm,$key,@info) = @_;
 	$key = Crypt::Mimetic::GetConfirmedPasswd() or throw Error::Mimetic "Password is needed" unless $key;
 	return &encrypt ($string, $key);
 }
 
-#
-# [string] DecryptFile($filename,$output,$offset,$len,$algorithm,$key,@info)
-#
+=pod
+
+=item [string] I<DecryptFile> ($filename,$output,$offset,$len,$algorithm,$key,@info)
+
+Decrypt a file with TEA algorithm. See I<Crypt::Mimetic::DecryptFile>.
+
+=cut
+
 sub DecryptFile {
 	my ($filename,$output,$offset,$len,$algorithm,$key,@info) = @_;
 	my ($blocklen,$padlen) = @info;
@@ -100,9 +143,14 @@ sub DecryptFile {
 	}
 }
 
-#
-# string DecryptString($string,$algorithm,$key,@info)
-#
+=pod
+
+=item string I<DecryptString> ($string,$algorithm,$key,@info)
+
+Decrypt a string with TEA algorithm. See I<Crypt::Mimetic::DecryptString>.
+
+=cut
+
 sub DecryptString {
 	my ($string,$algorithm,$key,@info) = @_;
 	$key = GetPasswd() or throw Error::Mimetic "Password is needed" unless $key;
@@ -110,53 +158,9 @@ sub DecryptString {
 }
 
 1;
+__END__
 
 =pod
-
-=head1 NAME
-
-Crypt::Mimetic::TEA - Tiny Encryption Algorithm
-
-	
-=head1 DESCRIPTION
-
-This module is a part of I<Crypt::Mimetic>.
-
-This modules uses TEA to encrypt blocks of bytes, so I<DecryptFile> needs @info containing generic-blocks-length and last-block-length (padlen) to know how decrypt a file. I<EncryptString> and I<DecryptString> always encrypt/decrypt a string as a single block.
-
-
-=head1 SYNOPSIS
-
-=item string I<ShortDescr> ()
-
-Return a short description of algorithm
-
-
-=item boolean I<PasswdNeeded> ()
-
-Return true if password is needed by this algorithm, false otherwise.
-('TEA' return always true)
-
-
-=item ($len,$blocklen,$padlen,[string]) I<EncryptFile> ($filename,$output,$algorithm,$key,@info)
-
-Encrypt a file with TEA algorithm. See I<Crypt::Mimetic::EncryptFile>.
-
-
-=item string I<EncryptString> ($string,$algorithm,$key,@info)
-
-Encrypt a string with TEA algorithm. See I<Crypt::Mimetic::EncryptString>.
-
-
-=item [string] I<DecryptFile> ($filename,$output,$offset,$len,$algorithm,$key,@info)
-
-Decrypt a file with TEA algorithm. See I<Crypt::Mimetic::DecryptFile>.
-
-
-=item string I<DecryptString> ($string,$algorithm,$key,@info)
-
-Decrypt a string with TEA algorithm. See I<Crypt::Mimetic::DecryptString>.
-
 
 =head1 NEEDED MODULES
 
